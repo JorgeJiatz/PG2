@@ -1,0 +1,185 @@
+{% extends 'base/base.html' %}
+
+{% block page_content %}
+<div class="card shadow mb-4">
+  {% csrf_token %}
+  <!-- Card Header - Dropdown -->
+  <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+    <h6 class="m-0 font-weight-bold text-primary">Listado de Facturas</h6>
+  </div>
+  <!-- Card Body -->
+  <div class="card-body">
+    {% if not obj %}
+    <div class="alert alert-info">No hay Facturas</div>
+    {% endif %}
+    <div class="buttons-toolbar">
+      <a class="dropdown-item" href="{% url 'fac:factura_new' %}"><i class="far fa-calendar-plus"></i> Nueva Factura</a>
+    </div>
+    <table data-toggle="table" data-search="true" data-toolbar=".buttons-toolbar">
+      <thead>
+        <th data-sortable="true" data-field="id">No.</th>
+        <th data-sortable="true" data-field="nombres">Cliente</th>
+        <th data-sortable="true" data-field="apellidos">Total</th>
+        <th data-sortable="true" data-field="estado">Estado</th>
+        <!--<th data-field="estado">Estado</th>-->
+        <th class="all">Acciones</th>
+      </thead>
+      <tbody>
+        {% for item in obj %}
+        <tr>
+          <td>{{ item.id }}</td>
+          <td>{{ item.cliente }}</td>
+          <td>{{ item.total }}</td>
+          <td>
+            {% if item.estado_fel == 'F' %}
+            <div class="badge bg-success text-wrap font-weight-bold text-white" style="width: 6rem;">
+              Facturado
+            </div>
+            {% elif item.estado_fel == 'A' %}
+            <div class="badge bg-danger text-wrap font-weight-bold text-white" style="width: 6rem;">
+              Anulado
+            </div>
+            {% else %}
+            <div class="badge bg-warning text-wrap font-weight-bold text-white" style="width: 6rem;">
+              En proceso
+            </div>
+            {% endif %}
+          </td>
+          <!--<td>{{item.estado|yesno:"Activo,Inactivo"}}</td>-->
+          <td>
+            <div>
+              {% if item.estado_fel == 'F' %}
+              <a id_fact="{{ item.id }}" onclick="verFactura({{ item.id }});" id="id_fact"
+                class="href btn btn-info btn-circle" data-bs-toggle="tooltip" data-bs-placement="top"
+                data-bs-title="Ver Factura"><i class="fas fa-file-invoice"></i></a>
+              <a id_fact="{{ item.id }}" onclick="anularFactura({{ item.id }});" id="id_fact"
+                class="href btn btn-danger btn-circle" data-bs-toggle="modal" data-bs-target="#exampleModal"><i
+                  class="fas fa-eraser"></i></a>
+              {% elif item.estado_fel == 'A' %}
+              <a id_fact="{{ item.id }}" onclick="verFactura({{ item.id }});" id="id_fact"
+              class="href btn btn-danger btn-circle" data-bs-toggle="tooltip" data-bs-placement="top"
+              data-bs-title="Ver Factura"><i class="fas fa-file-invoice"></i></a>
+              {% else %}
+              <a href="{% url 'fac:factura_edit' item.id %}" class="href btn btn-warning btn-circle"
+                data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Editar Fact">
+                <i class="far fa-edit"></i>
+              </a>
+              {% endif %}
+
+
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="modal fade" id="idAnular" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Anular Factura</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form>
+            <div class="form-group">
+              {% csrf_token %}
+              <input type="hidden" class="form-control" id="idAnularFact" name="idAnularFact">
+            </div>
+            <div>
+              <label for="formGroupExampleInput">Ingresar Motivo</label>
+              <textarea name="motivo" id="motivo" cols="48" rows="4" style="margin: auto;"></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+          <button type="button" class="btn btn-primary" onclick="anularFacturas();" id="btnFacturar">Enviar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block js_page %}
+<script>
+  let idFact = document.getElementById('idAnularFact');
+  let motivo = document.getElementById('motivo');
+
+  function verFactura(id) {
+
+    let formData = new FormData();
+    const token = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    formData.append('id', id)
+
+    fetch("{% url 'fac:ver_factura' %}", {
+      method: "POST",
+      body: formData,
+      headers: { "X-CSRFToken": token.value },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+
+        if (data.flag) {
+          let pdfContenido = atob(data.Facturapdf);
+          let blob = new Blob([pdfContenido], { type: 'application/pdf' });
+          let url = URL.createObjectURL(blob)
+          window.open(url, '_blank');
+        } else {
+
+          mensaje(data.mensaje, 'red');
+        }
+
+      })
+      .catch((error) => {
+        mensaje(error, 'red');
+      });
+  }
+
+
+  function anularFactura(id) {
+    idFact.value = id
+    motivo.value = '';
+    $('#idAnular').modal('show')
+  }
+
+  function anularFacturas() {
+    let formData = new FormData();
+    const token = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    formData.append('id', idFact.value);
+    formData.append('motivo',motivo.value);
+    if(motivo.value != ''){
+      fetch("{% url 'fac:anularFactura' %}", {
+      method: "POST",
+      body: formData,
+      headers: { "X-CSRFToken": token.value },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+
+        if (data.flag) {
+
+          $('#idAnular').modal('hide');
+          window.location.href = '{% url "fac:factura_list" %}';
+        } else {
+
+          mensaje(data.mensaje, 'red');
+        }
+
+      })
+      .catch((error) => {
+        mensaje(error, 'red');
+      });
+    }else{
+      mensaje("Ingrese motivo por el cual desea anular la factura", 'red');
+    }
+
+   
+  }
+
+</script>
+{% endblock %}
